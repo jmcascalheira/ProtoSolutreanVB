@@ -1,9 +1,11 @@
 Package: ProtoSolutreanVB
 Version: 0.0.0.9000
-Title: What the Package Does (One Line, Title Case)
-Description: What the package does (one paragraph).
-Authors@R: person("First", "Last", email = "first.last@example.com", role = c("aut", "cre"))
+Title: Research compedium for a report on the Proto-Solutrean occupation of Vale Boi
+Description: Data and code for a report on the Proto-Solutrean occupation of Vale Boi.
+Authors@R: person("Joao", "Cascalheira", email = "jmcascalheira@ualg.pt", role = c("aut", "cre"))
 License: MIT + file LICENSE
 Encoding: UTF-8
 LazyData: true
 ByteCompile: true
+URL: https://github.com/jmcascalheira/ProtoSolutreanVB
+BugReports: https://github.com/jmcascalheira/ProtoSolutreanVB/issues
