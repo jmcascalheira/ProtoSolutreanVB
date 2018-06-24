@@ -9,3 +9,4 @@ LazyData: true
 ByteCompile: true
 URL: https://github.com/jmcascalheira/ProtoSolutreanVB
 BugReports: https://github.com/jmcascalheira/ProtoSolutreanVB/issues
+Imports: bookdown
