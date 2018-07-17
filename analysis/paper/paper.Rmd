@@ -1,56 +1,427 @@
 ---
-title: "Title Goes Here"
+title: "The Proto-Solutrean occupation of Vale Boi (Southwestern Iberia)"
 author:
-  - Author One
-  - Author Two
-date: "`r format(Sys.time(), '%d %B, %Y')`"
+  - Joana Belmiro (ICArEHB, University of Algarve, Faro, Portugal) nbicho@ualg.pt
+  - João Cascalheira (ICArEHB, University of Algarve, Faro, Portugal) jmcascalheira@ualg.pt
+  - Nuno Bicho (ICArEHB, University of Algarve, Faro, Portugal)
+date: '`r Sys.Date()`'
 output: 
-    bookdown::html_document2:
+    bookdown::word_document2: #subsistute by pdf_document2 or hmtl_document2 as necessary
       fig_caption: yes
-      reference_docx: "../templates/template.docx" # Insert path for the DOCX file
-bibliography: references.bib
-csl: "../templates/journal-of-archaeological-science.csl" # Insert path for the bib-style
+      reference_docx: "../templates/template.docx" 
+#bibliography: 
+#csl:
 abstract: |
-  Text of abstract
-keywords: |
-  keyword 1; keyword 2; keyword 3
-highlights: |
-  These are the highlights. 
+
 ---
 
 
-<!-- This is the format for text comments that will be ignored during renderings. Do not put R code in these comments because it will not be ignored. -->
-
 ```{r, setup, echo = FALSE}
+
 knitr::opts_chunk$set(
   collapse = TRUE,
   warning = FALSE,
   message = FALSE,
   echo = FALSE,
   comment = "#>",
+  dpi = 300,
   fig.path = "../figures/"
-)
+  )
 
-library(ProtoSolutreanVB) # Or use devtools::load_all('.', quiet = T) if your code is in script files, rather than as functions in the `/R` diretory
 ```
+
+```{r load_libraries, echo = FALSE}
+
+library(tidyverse)
+library(googlesheets)
+
+```
+
+```{r loadlithics, echo = FALSE}
+
+# Read lithics from Google sheets
+
+gs_ls()
+lithics <- gs_title("lithics_layers_4e_5")
+lithics <- gs_read(ss = lithics, ws = "Sheet1")
+lithics <- rename(lithics, id = ID)
+
+```
+
+
+```{r readdataset, echo = FALSE}
+
+dataset <- read.csv("C:/Users/jmcasca/Documents/R_DATA/compendiums/ProtoSolutreanVB/analysis/data/derived_data/dataset.csv")
+
+```
+
+```{r preparedata, echo = FALSE}
+
+# Read CSV's with field data from NewPlot software
+
+context <- read.csv("C:/Users/jmcasca/Documents/R_DATA/compendiums/ProtoSolutreanVB/analysis/data/raw_data/context.csv")
+xyz <- read.csv("C:/Users/jmcasca/Documents/R_DATA/compendiums/ProtoSolutreanVB/analysis/data/raw_data/xyz.csv")
+
+cols_to_concat <- c("Unit", "ID")
+
+context$ID <- str_squish(context$ID)
+xyz$ID <- str_squish(xyz$ID)
+
+context <- context %>%
+  unite_(col='id', cols_to_concat, sep="-", remove=FALSE) %>%
+  select(id, Spit, Level, Code) %>%
+  distinct(id, .keep_all = TRUE)
+
+xyz <- xyz %>%
+  rename(Unit = UNIT) %>%
+  unite_(col='id', cols_to_concat, sep="-", remove=FALSE) %>%
+  filter(Suffix == 0) %>%
+  select(id, X, Y, Z) %>%
+  distinct(id, .keep_all = TRUE)
+
+
+# Join field tables
+
+field_data <- full_join(xyz, context, by = "id")
+
+
+# Calculate spit volume from Buckets
+
+cols_to_concat <- c("Level", "Spit")
+
+buckets_by_spit <- context %>%
+  filter(Level %in% c("4E", "5", "5B", "5C") & Code == "BUCKET" & !Spit %in% c("limp_corte", "profile", " ", NA)) %>%
+  unite_(col='depth', cols_to_concat, sep=".", remove=FALSE)
+
+buckets_by_spit$depth <- str_replace(buckets_by_spit$depth, "B", "")
+buckets_by_spit$depth <- str_replace(buckets_by_spit$depth, "C", "")
+
+spit_vol <- buckets_by_spit %>%
+  group_by(depth) %>%
+  count(Code) %>%
+  mutate(spit_vol = (n*10)/1000)
+
+
+# Calculate average depth of spits
+
+spit_depths <- field_data %>%
+  filter(Level %in% c("4E", "5", "5B", "5C") & !Spit %in% c("limp_corte", "LIMP_CORTE", "profile", " ", NA, "0")) %>%
+  unite_(col='depth', cols_to_concat, sep=".", remove=FALSE)
+
+spit_depths$depth <- str_replace(spit_depths$depth, "B", "")
+spit_depths$depth <- str_replace(spit_depths$depth, "C", "")
+
+spit_aver_depths <- spit_depths %>%
+  group_by(depth) %>%
+  summarise(avg = mean(Z)) %>%
+  mutate_if(is.numeric, format, 3)
+
+
+## Data classes per spit
+
+full_data <- read.csv("C:/Users/jmcasca/Documents/R_DATA/compendiums/ProtoSolutreanVB/analysis/data/derived_data/dataset.csv")
+
+cols_to_concat <- c("Level", "Spit")
+
+lithics_by_spit <- full_data %>%
+  filter(Level %in% c("4E", "5", "5B", "5C") & !Spit %in% c("limp_corte", "profile", " ", NA)) %>%
+  select(id, Z, Spit, Level, Code, Classe, Fragmentacao_Artefacto, N_Esquirolas, Tipo_Retocado) %>%
+  unite_(col='depth', cols_to_concat, sep=".", remove=FALSE)
+
+lithics_by_spit$depth <- str_replace(lithics_by_spit$depth, "B", "")
+lithics_by_spit$depth <- str_replace(lithics_by_spit$depth, "C", "")
+
+
+# Cores
+
+cores_by_spit <- lithics_by_spit %>%
+  filter(Classe == "Núcleo") %>%
+  group_by(depth) %>%
+  count(Classe)
+
+
+# Debitage
+
+debitage_by_spit <- lithics_by_spit %>%
+  filter(Classe %in% c("Lasca", "Produto alongado"))
+
+debitage_by_spit$Classe <- str_replace(debitage_by_spit$Classe, "Lasca", "Debitagem")
+debitage_by_spit$Classe <- str_replace(debitage_by_spit$Classe, "Produto alongado", "Debitagem")
+
+debitage_prox_by_spit <- lithics_by_spit %>%
+  filter(Classe %in% c("Fragmento Lasca", "Fragmento produto alongado") & Fragmentacao_Artefacto == "Proximal")
+
+debitage_prox_by_spit$Classe <- str_replace(debitage_prox_by_spit$Classe, "Fragmento Lasca", "Debitagem")
+debitage_prox_by_spit$Classe <- str_replace(debitage_prox_by_spit$Classe, "Fragmento produto alongado", "Debitagem")
+
+debitage_by_spit_all <- bind_rows(debitage_by_spit, debitage_prox_by_spit, id = NULL)
+
+debitage_by_spit_all <- debitage_by_spit_all %>%
+  group_by(depth) %>%
+  count(Classe)
+
+
+# Retouched tools
+
+retouched_tools_by_spit <- lithics_by_spit %>%
+  filter(Classe == "Produto retocado") %>%
+  group_by(depth) %>%
+  count(Classe)
+
+
+# Chips
+
+chips_by_spit <- lithics_by_spit %>%
+  filter(Classe == "Esquírola") %>%
+  select(depth, N_Esquirolas) %>%
+  group_by(depth) %>%
+  summarise(n = sum(N_Esquirolas))
+
+chips_by_spit$Classe <- rep("Esquírola",nrow(chips_by_spit))
+chips_by_spit <- select(chips_by_spit, depth, Classe, n)
+
+
+# Burins
+
+burins_by_spit <- lithics_by_spit %>%
+  filter(Tipo_Retocado %in% c("Buril", "Buril sobre truncatura"))
+
+burins_by_spit$Tipo_Retocado <- str_replace(burins_by_spit$Tipo_Retocado, "Buril sobre truncatura", "Buril")
+
+burins_by_spit <- burins_by_spit %>%
+  group_by(depth) %>%
+  count(Tipo_Retocado)
+
+burins_by_spit <- select(burins_by_spit, depth, Classe = Tipo_Retocado, n)
+
+
+# Endscrapers
+
+endscrapers_by_spit <- lithics_by_spit %>%
+  filter(Tipo_Retocado == "Raspadeira") %>%
+  group_by(depth) %>%
+  count(Tipo_Retocado)
+
+endscrapers_by_spit <- select(endscrapers_by_spit, depth, Classe = Tipo_Retocado, n)
+
+
+
+# Calculate data classes per cubic meter !!Needs revision to reduce code!!
+
+cores_by_spit$spit_vol <- spit_vol$spit_vol[match(cores_by_spit$depth, spit_vol$depth)]
+cores_by_spit <- cores_by_spit %>%
+  mutate(artifacts_by_cubic_meter = n/spit_vol)
+cores_by_spit$spit_aver_depth <- spit_aver_depths$avg[match(cores_by_spit$depth, spit_aver_depths$depth)]
+cores_by_spit$spit_aver_depth <- as.numeric(as.character(cores_by_spit$spit_aver_depth))
+
+
+debitage_by_spit_all$spit_vol <- spit_vol$spit_vol[match(debitage_by_spit_all$depth, spit_vol$depth)]
+debitage_by_spit_all <- debitage_by_spit_all %>%
+  mutate(artifacts_by_cubic_meter = n/spit_vol)
+debitage_by_spit_all$spit_aver_depth <- spit_aver_depths$avg[match(debitage_by_spit_all$depth, spit_aver_depths$depth)]
+debitage_by_spit_all$spit_aver_depth <- as.numeric(as.character(debitage_by_spit_all$spit_aver_depth))
+
+retouched_tools_by_spit$spit_vol <- spit_vol$spit_vol[match(retouched_tools_by_spit$depth, spit_vol$depth)]
+retouched_tools_by_spit <- retouched_tools_by_spit %>%
+  mutate(artifacts_by_cubic_meter = n/spit_vol)
+retouched_tools_by_spit$spit_aver_depth <- spit_aver_depths$avg[match(retouched_tools_by_spit$depth, spit_aver_depths$depth)]
+retouched_tools_by_spit$spit_aver_depth <- as.numeric(as.character(retouched_tools_by_spit$spit_aver_depth))
+
+
+chips_by_spit$spit_vol <- spit_vol$spit_vol[match(chips_by_spit$depth, spit_vol$depth)]
+chips_by_spit <- chips_by_spit %>%
+  mutate(artifacts_by_cubic_meter = n/spit_vol) %>%
+  filter(!depth %in% c("5.9", "5.10"))
+chips_by_spit$spit_aver_depth <- spit_aver_depths$avg[match(chips_by_spit$depth, spit_aver_depths$depth)]
+chips_by_spit$spit_aver_depth <- as.numeric(as.character(chips_by_spit$spit_aver_depth))
+
+burins_by_spit$spit_vol <- spit_vol$spit_vol[match(burins_by_spit$depth, spit_vol$depth)]
+burins_by_spit <- burins_by_spit %>%
+  mutate(artifacts_by_cubic_meter = n/spit_vol)
+burins_by_spit$spit_aver_depth <- spit_aver_depths$avg[match(burins_by_spit$depth, spit_aver_depths$depth)]
+burins_by_spit$spit_aver_depth <- as.numeric(as.character(burins_by_spit$spit_aver_depth))
+
+endscrapers_by_spit$spit_vol <- spit_vol$spit_vol[match(endscrapers_by_spit$depth, spit_vol$depth)]
+endscrapers_by_spit <- endscrapers_by_spit %>%
+  mutate(artifacts_by_cubic_meter = n/spit_vol)
+endscrapers_by_spit$spit_aver_depth <- spit_aver_depths$avg[match(endscrapers_by_spit$depth, spit_aver_depths$depth)]
+endscrapers_by_spit$spit_aver_depth <- as.numeric(as.character(endscrapers_by_spit$spit_aver_depth))
+
+
+# Merge tables
+
+artifacts_by_cubic_meter <- bind_rows(chips_by_spit, debitage_by_spit_all)
+
+
+# Remove low volumetric levels
+
+artifacts_by_cubic_meter <- filter(artifacts_by_cubic_meter, spit_vol > 0.10)
+
+
+```
+
 
 # Introduction
 
-Here is a citation [@Marwick2017]
-
 # Background
-
-```{r demo, eval = FALSE}
-1 + 1
-```
 
 # Methods
 
 # Results
 
-```{r get-data, eval = FALSE}
-# Note the path that we need to use to access our data files when rendering this document
-my_data <- readr::read_csv("../data/raw_data/my_csv_file.csv")
+
+```{r depthplot, echo = FALSE}
+
+# Plot artifact classes acros stratigraphy
+
+ggplot(artifacts_by_cubic_meter, (aes(spit_aver_depth, artifacts_by_cubic_meter, colour = Classe))) +
+  geom_point() +
+  stat_smooth(span = 0.5, se = FALSE) +
+  xlab("Profundidade (m)") +
+  ylab("Artefactos por metro cúbico de sedimento (log10)") +
+  scale_y_log10()+
+  coord_flip() +
+  scale_color_manual(values = c("grey50", "grey20")) +
+  theme_minimal()
+
+```
+
+
+
+```{r alongados, echo = FALSE}
+
+
+# Filter elongated debitage
+
+alongados <- lithics %>%
+  filter(Classe == "Produto alongado" & Materia == "Silex") %>%
+  select(Materia, Espessura, Largura)
+
+
+# Width Histogram
+
+require(plyr)
+mu <- ddply(alongados, "Materia", summarise, grp.mean=mean(Largura))
+
+ggplot(alongados, aes(x=Largura, color=Materia, fill=Materia)) +
+  geom_histogram(aes(y=..density..), position="identity", alpha=0.5)+
+  geom_density(alpha=0.6)+
+  geom_vline(data=mu, aes(xintercept=grp.mean, color=Materia),
+             linetype="dashed")+
+  scale_color_manual(values = "grey50")+
+  scale_fill_manual(values = "grey50")+
+  labs(x="Largura(mm)", y = "Densidade")
+
+```
+
+
+```{r scaterplot, echo = FALSE}
+
+alongados_all <- lithics %>%
+  filter(Classe == "Produto alongado" & Materia == "Silex") %>%
+  select(Materia, Comprimento, Largura)
+
+
+# Width vs Length scaterplot
+
+ggplot(alongados_all,aes(Largura, Comprimento)) +
+  geom_point() +
+  geom_smooth( method = lm, se = FALSE) +
+  scale_color_grey(start=0.8, end=0.2) +
+  xlab("Largura (mm)") +
+  ylab("Comprimento (mm)") +
+  theme_minimal()
+
+```
+
+```{r rawmaterials, echo = FALSE}
+
+# Filter data for raw materials
+
+raw_materials <- lithics %>%
+  filter(!Classe %in% c("Fragmento", "Esquírola")) %>%
+  group_by(Materia) %>%
+  dplyr::summarise(n = n()) %>%
+  mutate(freq = (n / sum(n)) * 100)
+
+
+# Barplot with raw materials
+
+ggplot(raw_materials, aes(x = reorder(Materia, -freq), y = freq)) +
+  geom_bar(stat = "identity", width = 0.7,  fill = "grey50") +
+  xlab("Matérias-primas") +
+  ylab("Percentagem") +
+  theme(axis.text=element_text(size=24),
+        axis.title.x = element_text(size = 26),
+        axis.title.y = element_text(size = 26),
+        legend.text = element_text(size= 24),
+        legend.title = element_text(size = 26)) +
+  theme_minimal()
+
+
+```
+
+```{r cortex, echo = FALSE, fig.asp = 1.2}
+
+
+# Filter data for cortex analysis
+
+cortex <- lithics %>%
+  filter(Classe %in% c("Núcleo", "Produto alongado", "Lasca", "Produto retocado") & Cortex != "NA") %>%
+  mutate(Classe = replace(Classe, Classe == "Produto retocado", "Retocado")) %>%
+  mutate(Classe = replace(Classe, Classe == "Produto alongado", "Alongado")) %>%
+  group_by(Materia, Classe, Cortex) %>%
+  dplyr::summarise(n = n()) %>%
+  mutate(freq = (n / sum(n)) * 100)
+
+cortex$Cortex = factor(cortex$Cortex, levels=c('0%','1-30%','31-60%','61-99%','100%'))
+cortex$Materia = factor(cortex$Materia, levels=c('Silex','Grauvaque','Calcedonia','Dolerito','Outro'))
+
+
+# Barplot of cortex by raw material and technological classes
+
+ggplot() +
+  geom_bar(aes(y = freq, x = Classe, fill = Cortex), data = cortex, stat = "identity", position = "fill") +
+  facet_wrap( ~ Materia, ncol = 2, scales='free') +
+  xlab("Classes") +
+  ylab("Percentagem") +
+  scale_fill_grey(start=0.7, end=0.2) +
+  theme_minimal() +
+  theme(axis.text.x = element_text(angle = 90))
+
+``` 
+
+
+```{r retocadosvertical, echo = FALSE}
+
+artifacts_by_cubic_meter <- bind_rows(burins_by_spit, endscrapers_by_spit)
+
+artifacts_by_cubic_meter <- filter(artifacts_by_cubic_meter, spit_vol > 0.10) # removes low volumetric levels
+
+ggplot(artifacts_by_cubic_meter, (aes(spit_aver_depth, artifacts_by_cubic_meter, colour = Classe))) +
+  geom_point() +
+  stat_smooth(span = 0.3, se = FALSE) +
+  xlab("Profundidade (m)") +
+  ylab("Número de artefactos por metro cúbico de sedimento (escala logarítmica)") +
+  scale_y_log10()+
+  coord_flip() +
+  scale_color_manual(values = c("grey50", "grey20")) +
+  theme_minimal()
+
+```
+
+
+```{r coreweight, echo = FALSE}
+
+chert_core_weight <- lithics %>% 
+  filter(Classe == "Núcleo" & Materia != "Calcedonia") %>% 
+  select(Peso, Materia)
+
+ggplot(chert_core_weight, aes(x = Materia, y = Peso)) +
+  geom_boxplot() +
+  xlab("Matéria prima") +
+  ylab("Peso (g)")
+
 ```
 
 # Discussion
